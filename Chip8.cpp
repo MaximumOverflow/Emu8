@@ -4,18 +4,20 @@
 
 #include <fstream>
 #include <iostream>
+#include <thread>
+#include <chrono>
 #include "Chip8.h"
 
 Chip8::Chip8() {
     cycles = 0;
 
-    for (int8 i : RAM)  RAM[i] = 0;
-    for (int8 i : V)    V[i] = 0;
+    for (int8_t i : RAM)  RAM[i] = 0;
+    for (int8_t i : V)    V[i] = 0;
     I = 0;
     DT = 0; ST = 0;
     PC = 0x200;
     SP = 0;
-    for (int16 i : stack.memory)   stack.memory[i] = 0;
+    for (int16_t i : stack.memory)   stack.memory[i] = 0;
     draw = false;
     OP_Code = 0;
 
@@ -55,13 +57,15 @@ void Chip8::tick()
     //TODO Implement OP Codes
 
     OP_Code = RAM[PC] << 8 | RAM[PC+1];
-    dump_OP_Code();
+    OP_Code = RAM[PC] << 8 | RAM[PC+1];
 
     uint8_t x = (OP_Code & 0x0F00)/16/16;
     uint8_t y = (OP_Code & 0x00F0)/16;
     uint8_t kk = (OP_Code & 0x00FF);
 
     PC+=2;
+
+    //dump_OP_Code();
 
     switch (OP_Code & 0xF000){
 
@@ -158,23 +162,32 @@ void Chip8::tick()
             case 0xC000:
             {
                 int8_t random = rand()%255;
-                V[x] = (random & 0x00FF);
+                V[x] = (random & kk);
                 break;
             }
 
 
             case 0xD000:
                 for (int Y = 0; Y < (OP_Code & 0x000F); ++Y) {
-                    int8 spriteLoad;
+                    int8_t spriteLoad;
                     if (I + Y <= 4096)
                         spriteLoad = RAM[I + Y];
                     else
                         Debugger::printError("Interpreter", "RAM Access out of bounds, the program might not work as intended from now on");
 
                     for (int X = 0; X < 8; ++X) {
-                        if (pixels[V[x]+X][V[y]+Y] == true && (pixels[V[x]+X][V[y]+Y] ^ (spriteLoad & 0x80)) == false)
-                            V[0xF] = true;
-                        pixels[V[x]+X][V[y]+Y] ^= (spriteLoad & 0x80);
+
+                        int computedX = (V[x] + X) % 64;
+                        int computedY = (V[y] + Y) + (V[x]/64);
+                        if (spriteLoad & 0x80)
+                        {
+                            if (pixels[computedX][computedY])
+                                V[0xF] = true;
+
+                            pixels[computedX][computedY] ^= 1;
+
+                        }
+
                         spriteLoad<<=1;
                     }
                 }
@@ -184,23 +197,24 @@ void Chip8::tick()
             case 0xE000:
                 switch (OP_Code & 0x00FF)
                 {
+
+                    case 0x009E:
+                        if(key[V[x]])
+                            PC+=2;
+                        std::cout << "Dynamic input unimplemented, falling back to input request\n";
+                        key[getkey()] = true;
+                        break;
+
                     case 0x00A1:
                         if(!key[V[x]])
                             PC+=2;
+                        std::cout << "Dynamic input unimplemented, falling back to input request\n";
+                        key[getkey()] = true;
                         break;
-                    case 0x009E:
-                        for (int i = 0; i < 16; ++i) {
-                            if(key[V[x]] == true)
-                            {
-                                PC+=2;
-                                break;
-                            }
-                        }
-                        break;
+
                     default:
                         dump_Unimplemented_OP_Code();
                         throw "Error";
-                        break;
                 }
                 break;
 
@@ -209,6 +223,9 @@ void Chip8::tick()
                 switch (OP_Code & 0x00FF) {
                     case 0x0007:
                         V[x] = DT;
+                        break;
+                    case 0x000A:
+                        V[x] = getkey();
                         break;
                     case 0x0015:
                         DT = V[x];
@@ -226,6 +243,11 @@ void Chip8::tick()
                         RAM[I] = (int)(V[x] / 100);
                         RAM[I+1] = (int)(V[x] / 10) % 10;
                         RAM[I+2] = (int)(V[x] % 100) % 10;
+                        break;
+                    case 0x0055:
+                        for (int j = 0; j < x; ++j) {
+                            RAM[I+x] = V[x];
+                        }
                         break;
                     case 0x0065:
                         for (int i = 0; i <= x; ++i) {
@@ -264,6 +286,8 @@ void Chip8::tick()
         draw = false;
     }
     //TODO Implement Input
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
 }
 
 int Chip8::LoadROM_Test(std::string path) {
@@ -300,4 +324,48 @@ void Chip8::dump_Unimplemented_OP_Code()
 
 void Chip8::dump_OP_Code() {
     std::cout << "[Debug Info] Current OP Code:" << std::hex << OP_Code << " at position " << PC << " on cycle " << std::dec << cycles<< "\n";
+}
+
+int Chip8::getkey() {
+    char key;
+    std::cout << "Waiting for keypress: ";
+    std::cin >> key;
+    switch (key){
+        case '1':
+            return 1;
+        case '2':
+            return 2;
+        case '3':
+            return 3;
+        case '4':
+            return 0xC;
+        case 'q':
+            return 4;
+        case 'w':
+            return 5;
+        case 'e':
+            return 6;
+        case 'r':
+            return 0xD;
+        case 'a':
+            return 7;
+        case 's':
+            return 8;
+        case 'd':
+            return 9;
+        case 'f':
+            return 0xE;
+        case 'z':
+            return 0xA;
+        case 'x':
+            return 0;
+        case 'c':
+            return 0xB;
+        case 'v':
+            return 0xF;
+
+        default:
+            getkey();
+            break;
+    }
 }

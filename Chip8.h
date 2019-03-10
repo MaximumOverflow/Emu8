@@ -7,12 +7,12 @@
 
 #include "Debugger.h"
 
-#include <tiff.h>
+#include <cstdint>
 #include <string>
 
 struct Stack {
-    int16 memory[16];
-    void operator<<(int16 data) {
+    int16_t memory[16];
+    void operator<<(int16_t data) {
         for (int i = 15; i > 0; --i)
             memory[i] = memory[i-1];
         memory[0] = data;
@@ -40,9 +40,11 @@ class Chip8 {
 
     //Keyboard
     bool key[16];
+    int getkey();
 
     //Graphics
     bool pixels[64][32];
+
     unsigned char fonts[80] = {
             0xF0, 0x90, 0x90, 0x90, 0xF0, //0
             0x20, 0x60, 0x20, 0x20, 0x70, //1
@@ -61,7 +63,6 @@ class Chip8 {
             0xF0, 0x80, 0xF0, 0x80, 0xF0, //E
             0xF0, 0x80, 0xF0, 0x80, 0x80  //F
     };
-
 public:
     Chip8 ();
     int LoadROM(std::string path);
